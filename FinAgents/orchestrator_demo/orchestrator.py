@@ -122,10 +122,11 @@ class Orchestrator:
                 end_dt = datetime.strptime(end_date, "%Y-%m-%d")
                 data = self.fetch_data(symbol, start_dt, end_dt)
                 
+                self.pipeline_context['data'] = data
                 self.pipeline_context['market_data'] = data
                 self.pipeline_context['symbol'] = symbol
                 self.pipeline_context['dates'] = (start_date, end_date)
-                
+
                 return f"Data fetched for {symbol}. stored in context."
             except Exception as e:
                 return f"Error: {e}"
@@ -565,14 +566,14 @@ class Orchestrator:
     def run_agentic_pipeline(self, user_request: str):
         """Run the pipeline using the Manager Agent"""
         logger.info(f"Manager Agent processing: {user_request}")
-        return Runner.run_sync(self.manager_agent, user_request)
+        return Runner.run_sync(self.manager_agent, user_request, context=self.pipeline_context)
 
 if __name__ == "__main__":
     orchestrator = Orchestrator()
     
     print("\n--- Agentic Pipeline Demo (Agent-as-Tool Pattern) ---")
     # Simulate a user request that triggers the agents
-    request = "Fetch data for AAPL, MSFT (2023-01-01 to 2023-06-01) and then ask Alpha Agent to analyze it."
+    request = "Fetch data for AAPL, MSFT (2025-01-01 to 2025-06-01) and then ask Alpha Agent to analyze it. Finish the pipeline in fast path. Try backtest even though no signal catched. Get results."
     
     result = orchestrator.run_agentic_pipeline(request)
     print("\nFinal Result:")

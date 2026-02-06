@@ -23,7 +23,9 @@ sys.path.append(str(alpha_agent_pool_path))
 # Import OpenAI Agents SDK
 import nest_asyncio
 nest_asyncio.apply()
+sys.path = [p for p in sys.path if p != '/Users/sangkyu/Work/tutorials/AgenticTrading/FinAgents/agent_pools/alpha_agent_pool']
 from agents import Agent, Runner, function_tool, RunContextWrapper
+sys.path.append(str(alpha_agent_pool_path))
 
 # Import Qlib utilities
 try:
