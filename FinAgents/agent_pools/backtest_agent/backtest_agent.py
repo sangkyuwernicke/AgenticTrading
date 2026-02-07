@@ -2580,11 +2580,18 @@ class BacktestAgent(Agent):
                     if output_dir: os.makedirs(output_dir, exist_ok=True)
                     
                     plots['pnl_curve'] = visualizer.plot_pnl_curve(
-                        returns_series, save_path=f"{output_dir}/pnl_curve.png" if output_dir else None
+                        returns_series, returns_series, save_path=f"{output_dir}/pnl_curve.png" if output_dir else None
                     )
                     plots['drawdown'] = visualizer.plot_drawdown(
                         returns_series, save_path=f"{output_dir}/drawdown.png" if output_dir else None
                     )
+                    plots['returns_distribution'] = visualizer.plot_returns_distribution(
+                        returns_series, save_path=f"{output_dir}/returns_distribution.png" if output_dir else None
+                    )
+                    plots['monthly_returns'] = visualizer.plot_monthly_returns(
+                        returns_series, save_path=f"{output_dir}/monthly_returns.png" if output_dir else None
+                    )
+
                     results['visualizations'] = {'plots_generated': True, 'output_dir': output_dir}
                     print(f"✅ Generated visualization plots")
                 except Exception as e:

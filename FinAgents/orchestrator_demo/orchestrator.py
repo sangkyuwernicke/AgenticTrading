@@ -378,7 +378,8 @@ class Orchestrator:
                 investment_horizon=rebalance_freq,
                 total_capital=total_capital,
                 market_data=test_data, # Backtest on Test Data only
-                plot_results=False 
+                plot_results=True,
+                output_dir='.'
             )
             
             return backtest_result
@@ -492,7 +493,8 @@ class Orchestrator:
                 investment_horizon=rebalance_freq,
                 total_capital=total_capital,
                 market_data=backtest_market_data,
-                plot_results=False
+                plot_results=True,
+                output_dir='.'
             )
             
             return backtest_result

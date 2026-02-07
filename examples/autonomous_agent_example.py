@@ -14,6 +14,8 @@ import os
 
 # Add project path for imports
 sys.path.append('/Users/lijifeng/Documents/AI_agent/FinAgent-Orchestration')
+# sys.path.append('./')
+sys.path.append('/Users/sangkyu/Work/tutorials/AgenticTrading')
 
 async def test_autonomous_agent():
     """Test the complete workflow of the autonomous agent"""
