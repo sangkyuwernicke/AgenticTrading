@@ -2,7 +2,7 @@
 Simple LLM-Enhanced 3-Year Backtest with Real Market Data
 
 This script runs a 3-year backtest that:
-- Uses real AAPL and MSFT market data via Data Agent Pool MCP integration
+- Uses KOSPI top 10 stocks market data via Data Agent Pool MCP integration
 - Uses dynamic LLM calls to o4-mini based on market conditions
 - Performs memory-based attribution analysis
 - Shows working agents during backtest
@@ -34,6 +34,29 @@ logging.basicConfig(
     format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
 )
 logger = logging.getLogger("SimpleLLMBacktest")
+
+# KOSPI Top 10 stocks (ticker: company name)
+KOSPI_TOP10 = {
+    "005930": "삼성전자",
+    "000660": "SK하이닉스",
+    "373220": "LG에너지솔루션",
+    "207940": "삼성바이오로직스",
+    "005380": "현대차",
+    "000270": "기아",
+    "005490": "POSCO홀딩스",
+    "068270": "셀트리온",
+    "105560": "KB금융",
+    "055550": "신한지주",
+}
+KOSPI_SYMBOLS = list(KOSPI_TOP10.keys())
+
+# Base prices in KRW (approximate)
+KOSPI_BASE_PRICES = {
+    "005930": 75000,   "000660": 170000, "373220": 400000,
+    "207940": 900000,  "005380": 250000, "000270": 110000,
+    "005490": 390000,  "068270": 190000, "105560": 80000,
+    "055550": 50000,
+}
 
 # Import FinAgent components
 from FinAgents.orchestrator.core.finagent_orchestrator import FinAgentOrchestrator
@@ -196,7 +219,10 @@ class OrchestratorBasedBacktester:
         
         # Simulate natural language instruction
         nl_instruction = """
-        I want to run a comprehensive 3-year backtest for AAPL and MSFT using the following approach:
+        I want to run a comprehensive 3-year backtest for KOSPI top 10 stocks
+        (005930 삼성전자, 000660 SK하이닉스, 373220 LG에너지솔루션, 207940 삼성바이오로직스,
+         005380 현대차, 000270 기아, 005490 POSCO홀딩스, 068270 셀트리온, 105560 KB금융, 055550 신한지주)
+        using the following approach:
         1. Use momentum and mean reversion strategies
         2. Apply portfolio optimization with risk management
         3. Include transaction cost analysis
@@ -271,7 +297,8 @@ class OrchestratorBasedBacktester:
             if MCP_AVAILABLE:
                 data_pool_url = self.config["agent_pools"]["data_agent_pool"]["url"]
                 
-                query = "Get daily price data for AAPL and MSFT from 2022-01-01 to 2024-12-31"
+                symbols_str = ", ".join(KOSPI_SYMBOLS)
+                query = f"Get daily price data for KOSPI top 10 stocks ({symbols_str}) from 2022-01-01 to 2024-12-31"
                 
                 async with sse_client(data_pool_url, timeout=60) as (read, write):
                     async with ClientSession(read, write) as session:
@@ -301,8 +328,9 @@ class OrchestratorBasedBacktester:
             if MCP_AVAILABLE:
                 alpha_pool_url = self.config["agent_pools"]["alpha_agent_pool"]["url"]
                 
+                symbols_str = ", ".join(KOSPI_SYMBOLS)
                 query = f"""
-                Generate momentum and mean reversion signals for AAPL and MSFT.
+                Generate momentum and mean reversion signals for KOSPI top 10 stocks ({symbols_str}).
                 Market data: {json.dumps(market_data, default=str)[:500]}...
                 """
                 
@@ -334,9 +362,9 @@ class OrchestratorBasedBacktester:
                 portfolio_pool_url = self.config["agent_pools"]["portfolio_construction_agent_pool"]["url"]
                 
                 query = f"""
-                Optimize portfolio weights for AAPL and MSFT based on alpha signals.
+                Optimize portfolio weights for KOSPI top 10 stocks based on alpha signals.
                 Alpha signals: {json.dumps(alpha_signals, default=str)[:500]}...
-                Target risk level: medium, Expected return: 15%, Max position: 40% each
+                Target risk level: medium, Expected return: 10%, Max position: 20% each
                 """
                 
                 async with sse_client(portfolio_pool_url, timeout=60) as (read, write):
@@ -345,10 +373,10 @@ class OrchestratorBasedBacktester:
                         
                         result = await session.call_tool("process_strategy_request", {
                             "request": {
-                                "symbols": ["AAPL", "MSFT"],
+                                "symbols": KOSPI_SYMBOLS,
                                 "alpha_signals": alpha_signals,
-                                "risk_constraints": {"max_volatility": 0.15, "max_position": 0.4},
-                                "transaction_costs": {"AAPL": 0.01, "MSFT": 0.01}
+                                "risk_constraints": {"max_volatility": 0.20, "max_position": 0.20},
+                                "transaction_costs": {s: 0.003 for s in KOSPI_SYMBOLS}
                             }
                         })
                         
@@ -369,11 +397,12 @@ class OrchestratorBasedBacktester:
     
     def _generate_mock_portfolio_weights(self) -> Dict[str, Any]:
         """Generate mock portfolio weights"""
+        equal_weight = round(1.0 / len(KOSPI_SYMBOLS), 4)
         return {
             "status": "mock",
-            "weights": {"AAPL": 0.6, "MSFT": 0.4},
-            "expected_return": 0.12,
-            "volatility": 0.15,
+            "weights": {s: equal_weight for s in KOSPI_SYMBOLS},
+            "expected_return": 0.10,
+            "volatility": 0.20,
             "source": "mock_portfolio_optimizer"
         }
     
@@ -384,9 +413,9 @@ class OrchestratorBasedBacktester:
                 cost_pool_url = self.config["agent_pools"]["transaction_cost_agent_pool"]["url"]
                 
                 query = f"""
-                Analyze transaction costs for portfolio rebalancing.
+                Analyze transaction costs for KOSPI portfolio rebalancing.
                 Portfolio weights: {json.dumps(portfolio_weights, default=str)[:500]}...
-                Trading volume: $1M, Symbols: AAPL, MSFT
+                Trading volume: $1M, Symbols: {", ".join(KOSPI_SYMBOLS)}
                 """
                 
                 async with sse_client(cost_pool_url, timeout=60) as (read, write):
@@ -395,9 +424,9 @@ class OrchestratorBasedBacktester:
                         
                         result = await session.call_tool("process_strategy_request", {
                             "request": {
-                                "symbols": ["AAPL", "MSFT"],
-                                "trades": [{"symbol": "AAPL", "quantity": 100}, {"symbol": "MSFT", "quantity": 80}],
-                                "portfolio_weights": {"AAPL": 0.6, "MSFT": 0.4}
+                                "symbols": KOSPI_SYMBOLS,
+                                "trades": [{"symbol": s, "quantity": 10} for s in KOSPI_SYMBOLS],
+                                "portfolio_weights": {s: 0.1 for s in KOSPI_SYMBOLS}
                             }
                         })
                         
@@ -433,9 +462,9 @@ class OrchestratorBasedBacktester:
                 risk_pool_url = self.config["agent_pools"]["risk_agent_pool"]["url"]
                 
                 query = f"""
-                Analyze portfolio risk and apply risk management constraints.
+                Analyze portfolio risk and apply risk management constraints for KOSPI stocks.
                 Portfolio weights: {json.dumps(portfolio_weights, default=str)[:500]}...
-                Risk target: 15% volatility, Max drawdown: 10%, VaR confidence: 95%
+                Risk target: 20% volatility, Max drawdown: 15%, VaR confidence: 95%
                 """
                 
                 async with sse_client(risk_pool_url, timeout=60) as (read, write):
@@ -444,8 +473,8 @@ class OrchestratorBasedBacktester:
                         
                         result = await session.call_tool("process_strategy_request", {
                             "request": {
-                                "symbols": ["AAPL", "MSFT"],
-                                "portfolio_weights": {"AAPL": 0.6, "MSFT": 0.4},
+                                "symbols": KOSPI_SYMBOLS,
+                                "portfolio_weights": {s: 0.1 for s in KOSPI_SYMBOLS},
                                 "market_conditions": {"volatility": "medium"}
                             }
                         })
@@ -467,11 +496,13 @@ class OrchestratorBasedBacktester:
     
     def _generate_mock_risk_management(self) -> Dict[str, Any]:
         """Generate mock risk management"""
+        cash_weight = 0.05
+        stock_weight = round((1.0 - cash_weight) / len(KOSPI_SYMBOLS), 4)
         return {
             "status": "mock",
-            "var_95": -0.02,
-            "max_drawdown_limit": 0.15,
-            "risk_adjusted_weights": {"AAPL": 0.55, "MSFT": 0.35, "CASH": 0.1},
+            "var_95": -0.025,
+            "max_drawdown_limit": 0.20,
+            "risk_adjusted_weights": {**{s: stock_weight for s in KOSPI_SYMBOLS}, "CASH": cash_weight},
             "source": "mock_risk_manager"
         }
     
@@ -484,7 +515,7 @@ class OrchestratorBasedBacktester:
         # Initialize portfolio
         initial_capital = 1000000.0
         portfolio_value = initial_capital
-        symbols = ['AAPL', 'MSFT']
+        symbols = KOSPI_SYMBOLS
         
         # Initialize positions and tracking data
         positions = {symbol: 0.0 for symbol in symbols}  # Number of shares
@@ -518,8 +549,8 @@ class OrchestratorBasedBacktester:
         else:
             weights = {symbol: 1.0/len(symbols) for symbol in symbols}
         
-        # Simulate prices and trading
-        prices = {symbol: 150.0 if symbol == 'AAPL' else 300.0 for symbol in symbols}
+        # Simulate prices using KRW base prices
+        prices = {symbol: float(KOSPI_BASE_PRICES[symbol]) for symbol in symbols}
         
         for i in range(days):
             current_date = start_date + timedelta(days=i)
@@ -650,21 +681,19 @@ class OrchestratorBasedBacktester:
         """Generate mock market data"""
         return {
             "status": "mock",
-            "data": [
-                {"symbol": "AAPL", "date": "2022-01-01", "close": 150.0},
-                {"symbol": "MSFT", "date": "2022-01-01", "close": 300.0}
-            ],
+            "data": [{"symbol": s, "name": KOSPI_TOP10[s], "date": "2022-01-01",
+                      "close": float(KOSPI_BASE_PRICES[s])} for s in KOSPI_SYMBOLS],
             "source": "mock_data_generator"
         }
     
     def _generate_mock_alpha_signals(self) -> Dict[str, Any]:
         """Generate mock alpha signals"""
+        signals = [{"symbol": s, "name": KOSPI_TOP10[s],
+                    "signal": random.choice(["buy", "hold", "sell"]),
+                    "confidence": round(random.uniform(0.4, 0.8), 2)} for s in KOSPI_SYMBOLS]
         return {
             "status": "mock",
-            "signals": [
-                {"symbol": "AAPL", "signal": "buy", "confidence": 0.7},
-                {"symbol": "MSFT", "signal": "hold", "confidence": 0.5}
-            ],
+            "signals": signals,
             "source": "mock_signal_generator"
         }
     
@@ -762,8 +791,8 @@ class OrchestratorBasedBacktester:
         
         # 2. Position Holdings Over Time
         ax2 = plt.subplot(3, 2, 2)
-        symbols = list(position_history.keys()) if position_history else ['AAPL', 'MSFT']
-        colors = ['green', 'blue', 'red', 'orange', 'purple']
+        symbols = list(position_history.keys()) if position_history else KOSPI_SYMBOLS
+        colors = ['green', 'blue', 'red', 'orange', 'purple', 'brown', 'pink', 'gray', 'cyan', 'magenta']
         
         for i, symbol in enumerate(symbols):
             if symbol in position_history:
@@ -898,7 +927,8 @@ class OrchestratorBasedBacktester:
             ax1.plot(plot_dates, plot_values, 'b-', linewidth=2, label='Portfolio Value', alpha=0.8)
             
             # Group trades by symbol for different colors
-            symbol_colors = {'AAPL': 'green', 'MSFT': 'blue', 'GOOGL': 'red', 'AMZN': 'orange'}
+            symbol_colors = {s: c for s, c in zip(KOSPI_SYMBOLS,
+                ['green','blue','red','orange','purple','brown','pink','gray','cyan','magenta'])}
             legend_added = set()  # Track which legend entries have been added
             
             for trade in trades:
