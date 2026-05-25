@@ -298,7 +298,7 @@ class OrchestratorBasedBacktester:
                 data_pool_url = self.config["agent_pools"]["data_agent_pool"]["url"]
                 
                 symbols_str = ", ".join(KOSPI_SYMBOLS)
-                query = f"Get daily price data for KOSPI top 10 stocks ({symbols_str}) from 2022-01-01 to 2024-12-31"
+                query = f"Get daily price data for KOSPI top 10 stocks ({symbols_str}) from 2023-01-01 to 2025-12-31"
                 
                 async with sse_client(data_pool_url, timeout=60) as (read, write):
                     async with ClientSession(read, write) as session:
@@ -530,8 +530,8 @@ class OrchestratorBasedBacktester:
         trades = []  # Track all buy/sell events
         
         # Generate synthetic performance with realistic trading
-        start_date = datetime(2022, 1, 1)
-        end_date = datetime(2024, 12, 31)
+        start_date = datetime(2023, 1, 1)
+        end_date = datetime(2025, 12, 31)
         days = (end_date - start_date).days
         
         random.seed(42)  # For reproducible results
