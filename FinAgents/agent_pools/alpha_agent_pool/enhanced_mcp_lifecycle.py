@@ -592,13 +592,14 @@ def create_enhanced_mcp_server(pool_id: str = "alpha_pool") -> tuple[FastMCP, En
         if hasattr(mcp, '_mcp_server') and hasattr(mcp._mcp_server, '_handle_request'):
             original_handle_request = mcp._mcp_server._handle_request
             
-            async def enhanced_handle_request(request: JSONRPCMessage) -> None:
+            async def enhanced_handle_request(*args, **kwargs) -> None:
                 start_time = time.time()
+                request = args[0] if args else kwargs.get('message', kwargs.get('request'))
                 request_id = str(request.id) if hasattr(request, 'id') else "unknown"
                 method = getattr(request, 'method', 'unknown')
                 
                 try:
-                    result = await original_handle_request(request)
+                    result = await original_handle_request(*args, **kwargs)
                     duration = time.time() - start_time
                     lifecycle_manager.record_request(request_id, method, duration, True)
                     return result
