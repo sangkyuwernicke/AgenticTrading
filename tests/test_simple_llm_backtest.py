@@ -533,9 +533,9 @@ class OrchestratorBasedBacktester:
         start_date = datetime(2023, 1, 1)
         end_date = datetime(2025, 12, 31)
         days = (end_date - start_date).days
-        
+
         random.seed(42)  # For reproducible results
-        
+
         # Get portfolio weights from agent pool results
         if portfolio_weights.get("status") == "success":
             opt_result = portfolio_weights.get("portfolio_weights", {})
@@ -543,37 +543,54 @@ class OrchestratorBasedBacktester:
                 weights = opt_result["optimization_result"].get("portfolio_weights", {})
             else:
                 weights = opt_result
-            
             if not weights:
                 weights = {symbol: 1.0/len(symbols) for symbol in symbols}
         else:
             weights = {symbol: 1.0/len(symbols) for symbol in symbols}
-        
-        # Simulate prices using KRW base prices
-        prices = {symbol: float(KOSPI_BASE_PRICES[symbol]) for symbol in symbols}
+
+        # Load real price data from market_data if available (yfinance source)
+        real_price_series = {}  # {symbol: {date_str: close_price}}
+        if market_data.get("source") == "yfinance" and isinstance(market_data.get("data"), dict):
+            for sym, pts in market_data["data"].items():
+                if sym in symbols:
+                    real_price_series[sym] = {p["date"]: p["close"] for p in pts if "close" in p and "date" in p}
+            if real_price_series:
+                logger.info(f"📈 Using real yfinance prices for simulation: {list(real_price_series.keys())}")
+
+        # Initialize prices: real data preferred, fallback to KRW base prices
+        prices = {}
+        for symbol in symbols:
+            if symbol in real_price_series:
+                first_price = next(iter(real_price_series[symbol].values()), None)
+                prices[symbol] = float(first_price) if first_price else float(KOSPI_BASE_PRICES[symbol])
+            else:
+                prices[symbol] = float(KOSPI_BASE_PRICES[symbol])
         
         for i in range(days):
             current_date = start_date + timedelta(days=i)
             dates.append(current_date)
-            
-            # Update prices with random walk
+            date_str = current_date.strftime("%Y-%m-%d")
+
+            # Update prices: use real data if available, else random walk
             for symbol in symbols:
-                daily_change = random.normalvariate(0.0008, 0.015)  # ~20% annual return, 15% volatility
-                
-                # Apply alpha signals if available
-                if alpha_signals.get("status") == "success":
-                    signals = alpha_signals.get("signals", {})
-                    if symbol in signals:
-                        signal_data = signals[symbol]
-                        signal = signal_data.get("signal", "HOLD")
-                        confidence = signal_data.get("confidence", 0.0)
-                        
-                        if signal == "BUY":
-                            daily_change += confidence * 0.001  # Positive alpha
-                        elif signal == "SELL":
-                            daily_change -= confidence * 0.001  # Negative alpha
-                
-                prices[symbol] *= (1 + daily_change)
+                if symbol in real_price_series and date_str in real_price_series[symbol]:
+                    prices[symbol] = float(real_price_series[symbol][date_str])
+                else:
+                    daily_change = random.normalvariate(0.0003, 0.015)
+
+                    # Apply alpha signals if available
+                    if alpha_signals.get("status") == "success":
+                        signals = alpha_signals.get("signals", {})
+                        if symbol in signals:
+                            signal_data = signals[symbol]
+                            signal = signal_data.get("signal", "HOLD")
+                            confidence = signal_data.get("confidence", 0.0)
+                            if signal == "BUY":
+                                daily_change += confidence * 0.001
+                            elif signal == "SELL":
+                                daily_change -= confidence * 0.001
+
+                    prices[symbol] *= (1 + daily_change)
             
             # Rebalancing logic (monthly rebalancing)
             if i % 21 == 0 or i == 0:  # Every ~21 trading days (monthly)
