@@ -35,18 +35,18 @@ logging.basicConfig(
 )
 logger = logging.getLogger("SimpleLLMBacktest")
 
-# KOSPI Top 10 stocks (ticker: company name)
+# KOSPI Top 10 stocks as of 2023-01-02 (backtest start date) — no look-ahead bias
 KOSPI_TOP10 = {
     "005930": "삼성전자",
-    "000660": "SK하이닉스",
     "373220": "LG에너지솔루션",
+    "000660": "SK하이닉스",
     "207940": "삼성바이오로직스",
+    "005935": "삼성전자우",
     "005380": "현대차",
+    "035420": "NAVER",
+    "006400": "삼성SDI",
+    "035720": "카카오",
     "000270": "기아",
-    "005490": "POSCO홀딩스",
-    "068270": "셀트리온",
-    "105560": "KB금융",
-    "055550": "신한지주",
 }
 KOSPI_SYMBOLS = list(KOSPI_TOP10.keys())
 
@@ -54,12 +54,12 @@ KOSPI_SYMBOLS = list(KOSPI_TOP10.keys())
 BENCHMARK_TICKER = "322150.KS"
 BENCHMARK_NAME = "322150 (Kindex High Beta ETF)"
 
-# Base prices in KRW (approximate)
+# Base prices in KRW as of 2023-01-02 (approximate)
 KOSPI_BASE_PRICES = {
-    "005930": 75000,   "000660": 170000, "373220": 400000,
-    "207940": 900000,  "005380": 250000, "000270": 110000,
-    "005490": 390000,  "068270": 190000, "105560": 80000,
-    "055550": 50000,
+    "005930": 52000,   "373220": 446000, "000660": 74000,
+    "207940": 1272000, "005935": 47000,  "005380": 136000,
+    "035420": 176000,  "006400": 598000, "035720": 52500,
+    "000270": 53000,
 }
 
 # Import FinAgent components
@@ -223,15 +223,16 @@ class OrchestratorBasedBacktester:
         
         # Simulate natural language instruction
         nl_instruction = """
-        I want to run a comprehensive 3-year backtest for KOSPI top 10 stocks
-        (005930 삼성전자, 000660 SK하이닉스, 373220 LG에너지솔루션, 207940 삼성바이오로직스,
-         005380 현대차, 000270 기아, 005490 POSCO홀딩스, 068270 셀트리온, 105560 KB금융, 055550 신한지주)
+        I want to run a comprehensive 3-year backtest for KOSPI top 10 stocks as of 2023-01-02
+        (005930 삼성전자, 373220 LG에너지솔루션, 000660 SK하이닉스, 207940 삼성바이오로직스,
+         005935 삼성전자우, 005380 현대차, 035420 NAVER, 006400 삼성SDI, 035720 카카오, 000270 기아)
         using the following approach:
         1. Use momentum and mean reversion strategies
         2. Apply portfolio optimization with risk management
         3. Include transaction cost analysis
         4. Use $1 million initial capital
         5. Generate detailed performance attribution
+        (Note: stocks selected as of 2023-01-02 to avoid look-ahead bias)
         """
         
         logger.info(f"👤 User Instruction: {nl_instruction}")
