@@ -684,25 +684,30 @@ class OrchestratorBasedBacktester:
         drawdowns = (values_array - running_max) / running_max
         max_drawdown = np.min(drawdowns)
 
-        # ── Benchmark comparison ────────────────────────────────────────────
+        # ── Benchmark comparison (same overlapping period only) ─────────────
         benchmark_metrics = {}
+        portfolio_matched_metrics = {}
         benchmark_series = {}
         bm_price_series = self._fetch_benchmark_data("2023-01-01", "2025-12-31")
         if bm_price_series:
             bm_dates_sorted = sorted(bm_price_series.keys())
+            bm_start = bm_dates_sorted[0]
+            bm_end   = bm_dates_sorted[-1]
+
+            # --- Benchmark metrics over its own date range ---
             bm_prices = [bm_price_series[d] for d in bm_dates_sorted]
             bm_returns = [(bm_prices[i] - bm_prices[i-1]) / bm_prices[i-1] for i in range(1, len(bm_prices))]
             bm_arr = np.array(bm_returns)
             bm_total = (bm_prices[-1] - bm_prices[0]) / bm_prices[0]
             bm_vol = float(np.std(bm_arr) * np.sqrt(252)) if len(bm_arr) > 0 else 0.0
             bm_sharpe = float(np.mean(bm_arr) * 252 / bm_vol) if bm_vol > 0 else 0.0
-            bm_values = np.array(bm_prices)
-            bm_run_max = np.maximum.accumulate(bm_values)
-            bm_mdd = float(np.min((bm_values - bm_run_max) / bm_run_max))
+            bm_mdd = float(np.min((np.array(bm_prices) - np.maximum.accumulate(bm_prices)) / np.maximum.accumulate(bm_prices)))
             bm_ann = float((1 + bm_total) ** (252 / len(bm_returns)) - 1) if bm_returns else 0.0
             benchmark_metrics = {
                 "ticker": BENCHMARK_TICKER,
                 "name": BENCHMARK_NAME,
+                "period_start": bm_start,
+                "period_end": bm_end,
                 "total_return": bm_total,
                 "annualized_return": bm_ann,
                 "volatility": bm_vol,
@@ -710,6 +715,39 @@ class OrchestratorBasedBacktester:
                 "max_drawdown": bm_mdd,
                 "trading_days": len(bm_returns),
             }
+
+            # --- Portfolio metrics restricted to the same date window ---
+            # Build a date→portfolio_value lookup from the simulation
+            date_to_pv = {}
+            for idx, d in enumerate(dates):
+                d_str = d.strftime("%Y-%m-%d")
+                # daily_values[0] is initial capital; daily_values[i+1] is end-of-day i
+                pv_idx = idx + 1
+                if pv_idx < len(daily_values):
+                    date_to_pv[d_str] = daily_values[pv_idx]
+
+            # Find the subset of simulation dates that fall within benchmark range
+            overlap_dates = sorted([d for d in date_to_pv if bm_start <= d <= bm_end])
+            if len(overlap_dates) >= 2:
+                pv_overlap = [date_to_pv[d] for d in overlap_dates]
+                pv_returns = [(pv_overlap[i] - pv_overlap[i-1]) / pv_overlap[i-1] for i in range(1, len(pv_overlap))]
+                pv_arr = np.array(pv_returns)
+                pv_total = (pv_overlap[-1] - pv_overlap[0]) / pv_overlap[0]
+                pv_vol = float(np.std(pv_arr) * np.sqrt(252)) if len(pv_arr) > 0 else 0.0
+                pv_sharpe = float(np.mean(pv_arr) * 252 / pv_vol) if pv_vol > 0 else 0.0
+                pv_mdd = float(np.min((np.array(pv_overlap) - np.maximum.accumulate(pv_overlap)) / np.maximum.accumulate(pv_overlap)))
+                pv_ann = float((1 + pv_total) ** (252 / len(pv_returns)) - 1) if pv_returns else 0.0
+                portfolio_matched_metrics = {
+                    "period_start": overlap_dates[0],
+                    "period_end": overlap_dates[-1],
+                    "total_return": pv_total,
+                    "annualized_return": pv_ann,
+                    "volatility": pv_vol,
+                    "sharpe_ratio": pv_sharpe,
+                    "max_drawdown": pv_mdd,
+                    "trading_days": len(pv_returns),
+                }
+
             benchmark_series = {d: v for d, v in zip(bm_dates_sorted, bm_prices)}
         # ───────────────────────────────────────────────────────────────────
 
@@ -723,6 +761,7 @@ class OrchestratorBasedBacktester:
                 "final_value": portfolio_value
             },
             "benchmark_metrics": benchmark_metrics,
+            "portfolio_matched_metrics": portfolio_matched_metrics,
             "simulation_data": {
                 "daily_returns": daily_returns,
                 "daily_values": daily_values,
@@ -1155,27 +1194,32 @@ class OrchestratorBasedBacktester:
         logger.info(f"    Max Drawdown: {performance.get('max_drawdown', 0):.2%}")
         logger.info(f"    Final Value: ${performance.get('final_value', 0):,.2f}")
 
-        # Benchmark comparison
+        # Benchmark comparison (same overlapping period)
         bm = simulation.get("benchmark_metrics", {})
-        if bm:
-            logger.info(f"📊 Benchmark Comparison ({bm.get('name', BENCHMARK_TICKER)}):")
+        pm = simulation.get("portfolio_matched_metrics", {})
+        if bm and pm:
+            period = f"{pm.get('period_start', '?')} ~ {pm.get('period_end', '?')}"
+            logger.info(f"📊 Benchmark Comparison — same period: {period}")
+            logger.info(f"    ({bm.get('name', BENCHMARK_TICKER)}, {pm.get('trading_days', 0)} portfolio days / {bm.get('trading_days', 0)} benchmark days)")
             logger.info(f"    {'Metric':<25} {'Portfolio':>12} {'Benchmark':>12} {'Alpha':>12}")
             logger.info(f"    {'-'*61}")
-            p_ret  = performance.get('total_return', 0)
+            p_ret  = pm.get('total_return', 0)
             b_ret  = bm.get('total_return', 0)
-            p_ann  = performance.get('annualized_return', 0)
+            p_ann  = pm.get('annualized_return', 0)
             b_ann  = bm.get('annualized_return', 0)
-            p_vol  = performance.get('volatility', 0)
+            p_vol  = pm.get('volatility', 0)
             b_vol  = bm.get('volatility', 0)
-            p_sr   = performance.get('sharpe_ratio', 0)
+            p_sr   = pm.get('sharpe_ratio', 0)
             b_sr   = bm.get('sharpe_ratio', 0)
-            p_mdd  = performance.get('max_drawdown', 0)
+            p_mdd  = pm.get('max_drawdown', 0)
             b_mdd  = bm.get('max_drawdown', 0)
             logger.info(f"    {'Total Return':<25} {p_ret:>11.2%} {b_ret:>11.2%} {p_ret-b_ret:>+11.2%}")
             logger.info(f"    {'Annualized Return':<25} {p_ann:>11.2%} {b_ann:>11.2%} {p_ann-b_ann:>+11.2%}")
             logger.info(f"    {'Volatility':<25} {p_vol:>11.2%} {b_vol:>11.2%} {p_vol-b_vol:>+11.2%}")
             logger.info(f"    {'Sharpe Ratio':<25} {p_sr:>12.3f} {b_sr:>12.3f} {p_sr-b_sr:>+12.3f}")
             logger.info(f"    {'Max Drawdown':<25} {p_mdd:>11.2%} {b_mdd:>11.2%} {p_mdd-b_mdd:>+11.2%}")
+        elif bm:
+            logger.info(f"📊 Benchmark fetched ({bm.get('name', BENCHMARK_TICKER)}) but no overlapping portfolio dates found")
         
         # Trading activity summary
         sim_data = simulation.get("simulation_data", {})
