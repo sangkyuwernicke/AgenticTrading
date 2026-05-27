@@ -50,6 +50,10 @@ KOSPI_TOP10 = {
 }
 KOSPI_SYMBOLS = list(KOSPI_TOP10.keys())
 
+# Benchmark ETF ticker (Kindex Smart High Beta / KOSPI Top10 proxy)
+BENCHMARK_TICKER = "322150.KS"
+BENCHMARK_NAME = "322150 (Kindex High Beta ETF)"
+
 # Base prices in KRW (approximate)
 KOSPI_BASE_PRICES = {
     "005930": 75000,   "000660": 170000, "373220": 400000,
@@ -506,6 +510,22 @@ class OrchestratorBasedBacktester:
             "source": "mock_risk_manager"
         }
     
+    def _fetch_benchmark_data(self, start: str = "2023-01-01", end: str = "2025-12-31") -> Dict[str, Any]:
+        """Fetch benchmark price series from yfinance"""
+        try:
+            import yfinance as yf
+            df = yf.download(BENCHMARK_TICKER, start=start, end=end, progress=False, auto_adjust=True)
+            if df.empty:
+                logger.warning(f"⚠️ No benchmark data for {BENCHMARK_TICKER}")
+                return {}
+            close = df["Close"].squeeze()
+            price_series = {d.strftime("%Y-%m-%d"): float(v) for d, v in close.items() if not pd.isna(v)}
+            logger.info(f"📊 Benchmark {BENCHMARK_TICKER}: {len(price_series)} trading days fetched")
+            return price_series
+        except Exception as e:
+            logger.warning(f"⚠️ Benchmark fetch failed: {e}")
+            return {}
+
     async def _simulate_orchestrated_backtest(self, market_data: Dict[str, Any], alpha_signals: Dict[str, Any],
                                             portfolio_weights: Dict[str, Any], cost_analysis: Dict[str, Any],
                                             risk_management: Dict[str, Any]) -> Dict[str, Any]:
@@ -663,7 +683,36 @@ class OrchestratorBasedBacktester:
         running_max = np.maximum.accumulate(values_array)
         drawdowns = (values_array - running_max) / running_max
         max_drawdown = np.min(drawdowns)
-        
+
+        # ── Benchmark comparison ────────────────────────────────────────────
+        benchmark_metrics = {}
+        benchmark_series = {}
+        bm_price_series = self._fetch_benchmark_data("2023-01-01", "2025-12-31")
+        if bm_price_series:
+            bm_dates_sorted = sorted(bm_price_series.keys())
+            bm_prices = [bm_price_series[d] for d in bm_dates_sorted]
+            bm_returns = [(bm_prices[i] - bm_prices[i-1]) / bm_prices[i-1] for i in range(1, len(bm_prices))]
+            bm_arr = np.array(bm_returns)
+            bm_total = (bm_prices[-1] - bm_prices[0]) / bm_prices[0]
+            bm_vol = float(np.std(bm_arr) * np.sqrt(252)) if len(bm_arr) > 0 else 0.0
+            bm_sharpe = float(np.mean(bm_arr) * 252 / bm_vol) if bm_vol > 0 else 0.0
+            bm_values = np.array(bm_prices)
+            bm_run_max = np.maximum.accumulate(bm_values)
+            bm_mdd = float(np.min((bm_values - bm_run_max) / bm_run_max))
+            bm_ann = float((1 + bm_total) ** (252 / len(bm_returns)) - 1) if bm_returns else 0.0
+            benchmark_metrics = {
+                "ticker": BENCHMARK_TICKER,
+                "name": BENCHMARK_NAME,
+                "total_return": bm_total,
+                "annualized_return": bm_ann,
+                "volatility": bm_vol,
+                "sharpe_ratio": bm_sharpe,
+                "max_drawdown": bm_mdd,
+                "trading_days": len(bm_returns),
+            }
+            benchmark_series = {d: v for d, v in zip(bm_dates_sorted, bm_prices)}
+        # ───────────────────────────────────────────────────────────────────
+
         return {
             "performance_metrics": {
                 "total_return": total_return,
@@ -673,6 +722,7 @@ class OrchestratorBasedBacktester:
                 "max_drawdown": max_drawdown,
                 "final_value": portfolio_value
             },
+            "benchmark_metrics": benchmark_metrics,
             "simulation_data": {
                 "daily_returns": daily_returns,
                 "daily_values": daily_values,
@@ -680,10 +730,11 @@ class OrchestratorBasedBacktester:
                 "dates": dates,
                 "position_history": position_history,
                 "cash_history": cash_history,
-                "price_history": {symbol: [] for symbol in symbols},  # Will be filled if needed
+                "price_history": {symbol: [] for symbol in symbols},
                 "trades": trades,
                 "final_positions": positions,
-                "final_cash": cash
+                "final_cash": cash,
+                "benchmark_series": benchmark_series,
             },
             "orchestration_summary": {
                 "data_source": market_data.get("status", "unknown"),
@@ -775,6 +826,19 @@ class OrchestratorBasedBacktester:
         # 1. Portfolio Value Over Time with Buy/Sell Markers
         ax1 = plt.subplot(3, 2, 1)
         ax1.plot(plot_dates, daily_values, 'b-', linewidth=2, label='Portfolio Value')
+
+        # Add benchmark line (normalised to same initial capital)
+        bm_series = sim_data.get("benchmark_series", {})
+        if bm_series and dates:
+            bm_sorted = sorted(bm_series.items())
+            bm_plot_dates = [datetime.strptime(d, "%Y-%m-%d") for d, _ in bm_sorted]
+            bm_prices_list = [v for _, v in bm_sorted]
+            if bm_prices_list:
+                initial_capital_val = daily_values[0] if daily_values else 1_000_000
+                bm_scale = initial_capital_val / bm_prices_list[0]
+                bm_normalised = [p * bm_scale for p in bm_prices_list]
+                ax1.plot(bm_plot_dates, bm_normalised, 'r--', linewidth=1.5,
+                         label=f'Benchmark ({BENCHMARK_TICKER})', alpha=0.8)
         
         # Add buy/sell markers
         if trades:
@@ -1090,6 +1154,28 @@ class OrchestratorBasedBacktester:
         logger.info(f"    Sharpe Ratio: {performance.get('sharpe_ratio', 0):.3f}")
         logger.info(f"    Max Drawdown: {performance.get('max_drawdown', 0):.2%}")
         logger.info(f"    Final Value: ${performance.get('final_value', 0):,.2f}")
+
+        # Benchmark comparison
+        bm = simulation.get("benchmark_metrics", {})
+        if bm:
+            logger.info(f"📊 Benchmark Comparison ({bm.get('name', BENCHMARK_TICKER)}):")
+            logger.info(f"    {'Metric':<25} {'Portfolio':>12} {'Benchmark':>12} {'Alpha':>12}")
+            logger.info(f"    {'-'*61}")
+            p_ret  = performance.get('total_return', 0)
+            b_ret  = bm.get('total_return', 0)
+            p_ann  = performance.get('annualized_return', 0)
+            b_ann  = bm.get('annualized_return', 0)
+            p_vol  = performance.get('volatility', 0)
+            b_vol  = bm.get('volatility', 0)
+            p_sr   = performance.get('sharpe_ratio', 0)
+            b_sr   = bm.get('sharpe_ratio', 0)
+            p_mdd  = performance.get('max_drawdown', 0)
+            b_mdd  = bm.get('max_drawdown', 0)
+            logger.info(f"    {'Total Return':<25} {p_ret:>11.2%} {b_ret:>11.2%} {p_ret-b_ret:>+11.2%}")
+            logger.info(f"    {'Annualized Return':<25} {p_ann:>11.2%} {b_ann:>11.2%} {p_ann-b_ann:>+11.2%}")
+            logger.info(f"    {'Volatility':<25} {p_vol:>11.2%} {b_vol:>11.2%} {p_vol-b_vol:>+11.2%}")
+            logger.info(f"    {'Sharpe Ratio':<25} {p_sr:>12.3f} {b_sr:>12.3f} {p_sr-b_sr:>+12.3f}")
+            logger.info(f"    {'Max Drawdown':<25} {p_mdd:>11.2%} {b_mdd:>11.2%} {p_mdd-b_mdd:>+11.2%}")
         
         # Trading activity summary
         sim_data = simulation.get("simulation_data", {})
