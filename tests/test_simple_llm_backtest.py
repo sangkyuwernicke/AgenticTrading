@@ -62,6 +62,31 @@ KOSPI_BASE_PRICES = {
     "000270": 53000,
 }
 
+# ── Dynamic universe for monthly top-10 selection ─────────────────────────────
+# Approximate shares outstanding (fixed; changes <5% over 3 years — acceptable)
+KOSPI_UNIVERSE = {
+    "005930": {"name": "삼성전자",         "shares": 5_969_782_550},
+    "373220": {"name": "LG에너지솔루션",   "shares":   234_000_000},
+    "000660": {"name": "SK하이닉스",       "shares":   728_002_365},
+    "207940": {"name": "삼성바이오로직스", "shares":    71_174_000},
+    "005935": {"name": "삼성전자우",       "shares":   822_886_700},
+    "005380": {"name": "현대차",           "shares":   213_668_187},
+    "035420": {"name": "NAVER",            "shares":   164_263_395},
+    "006400": {"name": "삼성SDI",          "shares":    66_978_000},
+    "035720": {"name": "카카오",           "shares":   887_967_808},
+    "000270": {"name": "기아",             "shares":   399_429_050},
+    "005490": {"name": "POSCO홀딩스",      "shares":    87_186_835},
+    "068270": {"name": "셀트리온",         "shares":   172_721_246},
+    "105560": {"name": "KB금융",           "shares":   415_269_529},
+    "055550": {"name": "신한지주",         "shares":   505_233_502},
+    "051910": {"name": "LG화학",           "shares":    70_592_343},
+    "096770": {"name": "SK이노베이션",     "shares":    96_154_671},
+    "028260": {"name": "삼성물산",         "shares":   192_347_791},
+    "000810": {"name": "삼성화재",         "shares":    23_977_446},
+    "034730": {"name": "SK",               "shares":    70_360_153},
+    "003490": {"name": "대한항공",         "shares":   382_000_000},
+}
+
 # Import FinAgent components
 from FinAgents.orchestrator.core.finagent_orchestrator import FinAgentOrchestrator
 from FinAgents.orchestrator.core.dag_planner import TradingStrategy, BacktestConfiguration, AgentPoolType
@@ -297,18 +322,19 @@ class OrchestratorBasedBacktester:
         logger.info("✅ Multi-agent orchestrated backtest completed")
     
     async def _get_market_data_via_orchestrator(self) -> Dict[str, Any]:
-        """Get market data via Data Agent Pool through orchestrator"""
+        """Get market data for the full universe via Data Agent Pool"""
         try:
             if MCP_AVAILABLE:
                 data_pool_url = self.config["agent_pools"]["data_agent_pool"]["url"]
-                
-                symbols_str = ", ".join(KOSPI_SYMBOLS)
-                query = f"Get daily price data for KOSPI top 10 stocks ({symbols_str}) from 2023-01-01 to 2025-12-31"
-                
+
+                universe_symbols = list(KOSPI_UNIVERSE.keys())
+                symbols_str = ", ".join(universe_symbols)
+                query = f"Get daily price data for KOSPI universe stocks ({symbols_str}) from 2023-01-01 to 2025-12-31"
+
                 async with sse_client(data_pool_url, timeout=60) as (read, write):
                     async with ClientSession(read, write) as session:
                         await session.initialize()
-                        
+
                         result = await session.call_tool("process_market_query", {"query": query})
                         
                         if result.content and len(result.content) > 0:
@@ -558,160 +584,138 @@ class OrchestratorBasedBacktester:
     async def _simulate_orchestrated_backtest(self, market_data: Dict[str, Any], alpha_signals: Dict[str, Any],
                                             portfolio_weights: Dict[str, Any], cost_analysis: Dict[str, Any],
                                             risk_management: Dict[str, Any]) -> Dict[str, Any]:
-        """Simulate orchestrated backtest using all agent pool outputs"""
+        """Simulate backtest with monthly dynamic top-10 selection (no look-ahead bias)"""
         logger.info("⚡ Simulating orchestrated backtest...")
-        
-        # Initialize portfolio
+
         initial_capital = 1000000.0
-        portfolio_value = initial_capital
-        symbols = KOSPI_SYMBOLS
-        
-        # Initialize positions and tracking data
-        positions = {symbol: 0.0 for symbol in symbols}  # Number of shares
         cash = initial_capital
-        
-        # Tracking data for visualization
-        dates = []
-        daily_values = [initial_capital]
-        daily_returns = []
-        position_history = {symbol: [0.0] for symbol in symbols}
+        positions: Dict[str, float] = {}   # {symbol: shares}
+        prices:   Dict[str, float] = {}    # {symbol: current_price}
+
+        dates, daily_values, daily_returns = [], [initial_capital], []
+        position_history: Dict[str, List[float]] = {}
         cash_history = [cash]
-        trades = []  # Track all buy/sell events
-        
-        # Generate synthetic performance with realistic trading
+        trades: List[Dict] = []
+
         start_date = datetime(2023, 1, 1)
-        end_date = datetime(2025, 12, 31)
+        end_date   = datetime(2025, 12, 31)
         days = (end_date - start_date).days
 
-        random.seed(42)  # For reproducible results
+        random.seed(42)
 
-        # Get portfolio weights from agent pool results
-        if portfolio_weights.get("status") == "success":
-            opt_result = portfolio_weights.get("portfolio_weights", {})
-            if isinstance(opt_result, dict) and "optimization_result" in opt_result:
-                weights = opt_result["optimization_result"].get("portfolio_weights", {})
-            else:
-                weights = opt_result
-            if not weights:
-                weights = {symbol: 1.0/len(symbols) for symbol in symbols}
-        else:
-            weights = {symbol: 1.0/len(symbols) for symbol in symbols}
-
-        # Load real price data from market_data if available (yfinance source)
-        real_price_series = {}  # {symbol: {date_str: close_price}}
+        # ── Build full universe price series from market_data ─────────────────
+        universe_price_series: Dict[str, Dict[str, float]] = {}
         if market_data.get("source") == "yfinance" and isinstance(market_data.get("data"), dict):
             for sym, pts in market_data["data"].items():
-                if sym in symbols:
-                    real_price_series[sym] = {p["date"]: p["close"] for p in pts if "close" in p and "date" in p}
-            if real_price_series:
-                logger.info(f"📈 Using real yfinance prices for simulation: {list(real_price_series.keys())}")
+                universe_price_series[sym] = {
+                    p["date"]: float(p["close"])
+                    for p in pts if p.get("close") and p.get("date")
+                }
+        logger.info(f"📈 Universe price series loaded: {len(universe_price_series)} symbols")
 
-        # Initialize prices: real data preferred, fallback to KRW base prices
-        prices = {}
-        for symbol in symbols:
-            if symbol in real_price_series:
-                first_price = next(iter(real_price_series[symbol].values()), None)
-                prices[symbol] = float(first_price) if first_price else float(KOSPI_BASE_PRICES[symbol])
-            else:
-                prices[symbol] = float(KOSPI_BASE_PRICES[symbol])
-        
+        # Initialise prices for all universe symbols
+        for sym in KOSPI_UNIVERSE:
+            series = universe_price_series.get(sym, {})
+            prices[sym] = next(iter(series.values()), float(KOSPI_BASE_PRICES.get(sym, 50000)))
+
+        # Initialise position_history for all universe symbols
+        for sym in KOSPI_UNIVERSE:
+            position_history[sym] = [0.0]
+
+        def get_top10(date_str: str) -> List[str]:
+            """Rank universe by market cap on date_str; return top-10 tickers."""
+            market_caps = {}
+            for sym, info in KOSPI_UNIVERSE.items():
+                price = universe_price_series.get(sym, {}).get(date_str, prices.get(sym, 0))
+                market_caps[sym] = price * info["shares"]
+            return sorted(market_caps, key=lambda s: market_caps[s], reverse=True)[:10]
+
+        current_top10: List[str] = get_top10(start_date.strftime("%Y-%m-%d"))
+        equal_weight = 1.0 / 10
+        last_rebalance_month = -1
+
         for i in range(days):
             current_date = start_date + timedelta(days=i)
             dates.append(current_date)
             date_str = current_date.strftime("%Y-%m-%d")
 
-            # Update prices: use real data if available, else random walk
-            for symbol in symbols:
-                if symbol in real_price_series and date_str in real_price_series[symbol]:
-                    prices[symbol] = float(real_price_series[symbol][date_str])
+            # Update prices for all universe symbols
+            for sym in KOSPI_UNIVERSE:
+                if sym in universe_price_series and date_str in universe_price_series[sym]:
+                    prices[sym] = universe_price_series[sym][date_str]
                 else:
-                    daily_change = random.normalvariate(0.0003, 0.015)
+                    prices[sym] *= (1 + random.normalvariate(0.0003, 0.015))
 
-                    # Apply alpha signals if available
-                    if alpha_signals.get("status") == "success":
-                        signals = alpha_signals.get("signals", {})
-                        if symbol in signals:
-                            signal_data = signals[symbol]
-                            signal = signal_data.get("signal", "HOLD")
-                            confidence = signal_data.get("confidence", 0.0)
-                            if signal == "BUY":
-                                daily_change += confidence * 0.001
-                            elif signal == "SELL":
-                                daily_change -= confidence * 0.001
+            # ── Monthly rebalancing + top-10 re-selection ─────────────────────
+            if current_date.month != last_rebalance_month:
+                last_rebalance_month = current_date.month
+                new_top10 = get_top10(date_str)
 
-                    prices[symbol] *= (1 + daily_change)
-            
-            # Rebalancing logic (monthly rebalancing)
-            if i % 21 == 0 or i == 0:  # Every ~21 trading days (monthly)
-                total_portfolio_value = cash + sum(positions[symbol] * prices[symbol] for symbol in symbols)
-                
-                for symbol in symbols:
-                    target_value = total_portfolio_value * weights.get(symbol, 0.0)
-                    current_value = positions[symbol] * prices[symbol]
-                    
-                    if abs(target_value - current_value) > total_portfolio_value * 0.01:  # 1% threshold
-                        # Calculate shares to trade
-                        target_shares = target_value / prices[symbol]
-                        shares_to_trade = target_shares - positions[symbol]
-                        
-                        if abs(shares_to_trade) > 0.1:  # Minimum trade size
-                            # Apply transaction costs
-                            cost_per_share = cost_analysis.get("cost_breakdown", {}).get(symbol, {}).get("commission", 0.01)
-                            total_cost = abs(shares_to_trade) * cost_per_share
-                            
-                            if shares_to_trade > 0:  # Buying
-                                trade_value = shares_to_trade * prices[symbol] + total_cost
-                                if cash >= trade_value:
-                                    cash -= trade_value
-                                    positions[symbol] += shares_to_trade
-                                    trades.append({
-                                        "date": current_date,
-                                        "symbol": symbol,
-                                        "action": "BUY",
-                                        "shares": shares_to_trade,
-                                        "price": prices[symbol],
-                                        "value": shares_to_trade * prices[symbol],
-                                        "cost": total_cost
-                                    })
-                            else:  # Selling
-                                trade_value = abs(shares_to_trade) * prices[symbol] - total_cost
-                                cash += trade_value
-                                positions[symbol] += shares_to_trade  # shares_to_trade is negative
-                                trades.append({
-                                    "date": current_date,
-                                    "symbol": symbol,
-                                    "action": "SELL",
-                                    "shares": abs(shares_to_trade),
-                                    "price": prices[symbol],
-                                    "value": abs(shares_to_trade) * prices[symbol],
-                                    "cost": total_cost
-                                })
-            
-            # Calculate daily portfolio value
-            portfolio_value = cash + sum(positions[symbol] * prices[symbol] for symbol in symbols)
+                # Log rotation
+                added   = set(new_top10) - set(current_top10)
+                removed = set(current_top10) - set(new_top10)
+                if added or removed:
+                    logger.info(f"🔄 [{date_str}] Top10 변경 — 편입: {added} / 제외: {removed}")
+
+                current_top10 = new_top10
+                total_pv = cash + sum(positions.get(s, 0) * prices[s] for s in KOSPI_UNIVERSE)
+
+                # Step 1: Sell positions not in new top10
+                for sym in list(positions.keys()):
+                    if sym not in current_top10 and positions[sym] > 0:
+                        sell_value = positions[sym] * prices[sym]
+                        cost_per_share = cost_analysis.get("cost_breakdown", {}).get(sym, {}).get("commission", 0.01)
+                        total_cost = positions[sym] * cost_per_share
+                        cash += sell_value - total_cost
+                        trades.append({"date": current_date, "symbol": sym, "action": "SELL",
+                                       "shares": positions[sym], "price": prices[sym],
+                                       "value": sell_value, "cost": total_cost})
+                        positions[sym] = 0.0
+
+                # Step 2: Rebalance within top10 to equal weight
+                total_pv = cash + sum(positions.get(s, 0) * prices[s] for s in current_top10)
+                for sym in current_top10:
+                    target_value   = total_pv * equal_weight
+                    current_value  = positions.get(sym, 0.0) * prices[sym]
+                    delta_value    = target_value - current_value
+                    if abs(delta_value) < total_pv * 0.005:
+                        continue
+                    shares_delta = delta_value / prices[sym]
+                    cost_per_share = cost_analysis.get("cost_breakdown", {}).get(sym, {}).get("commission", 0.01)
+                    total_cost = abs(shares_delta) * cost_per_share
+
+                    if shares_delta > 0:   # Buy
+                        trade_value = shares_delta * prices[sym] + total_cost
+                        if cash >= trade_value:
+                            cash -= trade_value
+                            positions[sym] = positions.get(sym, 0.0) + shares_delta
+                            trades.append({"date": current_date, "symbol": sym, "action": "BUY",
+                                           "shares": shares_delta, "price": prices[sym],
+                                           "value": shares_delta * prices[sym], "cost": total_cost})
+                    else:                  # Sell
+                        cash += abs(shares_delta) * prices[sym] - total_cost
+                        positions[sym] = positions.get(sym, 0.0) + shares_delta
+                        trades.append({"date": current_date, "symbol": sym, "action": "SELL",
+                                       "shares": abs(shares_delta), "price": prices[sym],
+                                       "value": abs(shares_delta) * prices[sym], "cost": total_cost})
+
+            # Daily portfolio value
+            portfolio_value = cash + sum(positions.get(s, 0) * prices[s] for s in KOSPI_UNIVERSE)
             daily_values.append(portfolio_value)
-            
-            # Record positions
-            for symbol in symbols:
-                position_history[symbol].append(positions[symbol])
+            for sym in KOSPI_UNIVERSE:
+                position_history[sym].append(positions.get(sym, 0.0))
             cash_history.append(cash)
-            
-            # Calculate daily return
             if len(daily_values) > 1:
-                daily_return = (daily_values[-1] - daily_values[-2]) / daily_values[-2]
-                daily_returns.append(daily_return)
-        
-        # Calculate performance metrics
+                daily_returns.append((daily_values[-1] - daily_values[-2]) / daily_values[-2])
+
+        # ── Performance metrics ───────────────────────────────────────────────
         returns_array = np.array(daily_returns)
-        total_return = (portfolio_value - initial_capital) / initial_capital
-        volatility = np.std(returns_array) * np.sqrt(252) if len(returns_array) > 0 else 0
-        sharpe_ratio = (np.mean(returns_array) * 252) / volatility if volatility > 0 else 0
-        
-        # Calculate max drawdown
-        values_array = np.array(daily_values)
-        running_max = np.maximum.accumulate(values_array)
-        drawdowns = (values_array - running_max) / running_max
-        max_drawdown = np.min(drawdowns)
+        total_return  = (portfolio_value - initial_capital) / initial_capital
+        volatility    = float(np.std(returns_array) * np.sqrt(252)) if len(returns_array) > 0 else 0
+        sharpe_ratio  = float(np.mean(returns_array) * 252 / volatility) if volatility > 0 else 0
+        values_array  = np.array(daily_values)
+        running_max   = np.maximum.accumulate(values_array)
+        max_drawdown  = float(np.min((values_array - running_max) / running_max))
 
         # ── Benchmark comparison (same overlapping period only) ─────────────
         benchmark_metrics = {}
@@ -798,11 +802,12 @@ class OrchestratorBasedBacktester:
                 "dates": dates,
                 "position_history": position_history,
                 "cash_history": cash_history,
-                "price_history": {symbol: [] for symbol in symbols},
+                "price_history": {symbol: [] for symbol in KOSPI_UNIVERSE},
                 "trades": trades,
-                "final_positions": positions,
+                "final_positions": {s: v for s, v in positions.items() if v > 0},
                 "final_cash": cash,
                 "benchmark_series": benchmark_series,
+                "final_top10": current_top10,
             },
             "orchestration_summary": {
                 "data_source": market_data.get("status", "unknown"),
@@ -1284,12 +1289,15 @@ class OrchestratorBasedBacktester:
                 logger.info(f"      {symbol}: {data['count']} trades, ${data['volume']:,.2f} volume")
         
         # Final portfolio composition
+        final_top10 = sim_data.get("final_top10", [])
         if final_positions:
-            logger.info(f"🏦 Final Portfolio Composition:")
+            logger.info(f"🏦 Final Portfolio Composition (Top10 as of end date):")
+            if final_top10:
+                logger.info(f"    Top10: {[KOSPI_UNIVERSE.get(s,{}).get('name', s) for s in final_top10]}")
             logger.info(f"    Cash: ${final_cash:,.2f}")
             for symbol, shares in final_positions.items():
-                if shares > 0:
-                    logger.info(f"    {symbol}: {shares:,.2f} shares")
+                name = KOSPI_UNIVERSE.get(symbol, {}).get("name", symbol)
+                logger.info(f"    {symbol} {name}: {shares:,.2f} shares")
         
         # Analysis summary
         analysis = self.backtest_results.get("analysis", {})
