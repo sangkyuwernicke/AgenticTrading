@@ -327,54 +327,72 @@ class OrchestratorBasedBacktester:
             return self._generate_mock_market_data()
     
     async def _generate_alpha_via_orchestrator(self, market_data: Dict[str, Any]) -> Dict[str, Any]:
-        """Generate alpha signals via Alpha Agent Pool"""
+        """Generate alpha signals by calling momentum agent directly with real yfinance price history"""
         try:
             if MCP_AVAILABLE:
-                alpha_pool_url = self.config["agent_pools"]["alpha_agent_pool"]["url"]
-                
-                symbols_str = ", ".join(KOSPI_SYMBOLS)
-                query = f"""
-                Generate momentum and mean reversion signals for KOSPI top 10 stocks ({symbols_str}).
-                Market data: {json.dumps(market_data, default=str)[:500]}...
-                """
-                
-                async with sse_client(alpha_pool_url, timeout=60) as (read, write):
-                    async with ClientSession(read, write) as session:
+                # Build 20-day price history per symbol from real market_data
+                price_history: Dict[str, List[float]] = {}
+                if market_data.get("source") == "yfinance" and isinstance(market_data.get("data"), dict):
+                    for sym, pts in market_data["data"].items():
+                        if sym in KOSPI_SYMBOLS and pts:
+                            closes = [float(p["close"]) for p in pts if p.get("close")]
+                            if closes:
+                                price_history[sym] = closes[-21:]  # last 21 closes → 20 returns
+
+                momentum_url = "http://127.0.0.1:5051/sse"
+                normalized_signals = {}
+
+                async with sse_client(momentum_url, timeout=30) as (r, w):
+                    async with ClientSession(r, w) as session:
                         await session.initialize()
-                        
-                        result = await session.call_tool("process_strategy_request", {"query": query})
-                        
-                        if result.content and len(result.content) > 0:
-                            content_item = result.content[0]
-                            if hasattr(content_item, 'text'):
-                                signals = json.loads(content_item.text)
-                                logger.info(f"✅ Generated alpha signals: {signals.get('status', 'unknown')}")
-                                return signals
-                        
-                        return {"status": "error", "error": "No alpha signals received"}
+
+                        for sym in KOSPI_SYMBOLS:
+                            price_list = price_history.get(sym, [])
+                            if not price_list:
+                                normalized_signals[sym] = {"signal": "HOLD", "confidence": 0.0}
+                                continue
+
+                            res = await session.call_tool("generate_signal", {
+                                "symbol": sym,
+                                "price_list": price_list,
+                            })
+
+                            if res.content:
+                                raw = json.loads(res.content[0].text)
+                                # Response nested under "decision"
+                                sig = raw.get("decision", raw)
+                                normalized_signals[sym] = {
+                                    "signal": sig.get("signal", "HOLD"),
+                                    "confidence": float(sig.get("confidence", 0.0)),
+                                }
+
+                if normalized_signals:
+                    buy  = sum(1 for s in normalized_signals.values() if s["signal"] == "BUY")
+                    sell = sum(1 for s in normalized_signals.values() if s["signal"] == "SELL")
+                    hold = sum(1 for s in normalized_signals.values() if s["signal"] == "HOLD")
+                    avg_conf = sum(s["confidence"] for s in normalized_signals.values()) / len(normalized_signals)
+                    logger.info(f"✅ Alpha signals (momentum): BUY={buy} SELL={sell} HOLD={hold} avg_conf={avg_conf:.2f}")
+                    return {"status": "success", "signals": normalized_signals}
+
+                return {"status": "error", "error": "No alpha signals received"}
             else:
                 return self._generate_mock_alpha_signals()
-                
+
         except Exception as e:
             logger.warning(f"⚠️ Alpha Agent Pool request failed: {e}")
             return self._generate_mock_alpha_signals()
-    
+
     async def _construct_portfolio_via_orchestrator(self, alpha_signals: Dict[str, Any]) -> Dict[str, Any]:
         """Construct portfolio via Portfolio Construction Agent Pool"""
         try:
             if MCP_AVAILABLE:
                 portfolio_pool_url = self.config["agent_pools"]["portfolio_construction_agent_pool"]["url"]
-                
-                query = f"""
-                Optimize portfolio weights for KOSPI top 10 stocks based on alpha signals.
-                Alpha signals: {json.dumps(alpha_signals, default=str)[:500]}...
-                Target risk level: medium, Expected return: 10%, Max position: 20% each
-                """
-                
+
                 async with sse_client(portfolio_pool_url, timeout=60) as (read, write):
                     async with ClientSession(read, write) as session:
                         await session.initialize()
-                        
+
+                        # process_strategy_request returns {"status","portfolio_weights":{sym:weight,...},...}
                         result = await session.call_tool("process_strategy_request", {
                             "request": {
                                 "symbols": KOSPI_SYMBOLS,
@@ -383,18 +401,28 @@ class OrchestratorBasedBacktester:
                                 "transaction_costs": {s: 0.003 for s in KOSPI_SYMBOLS}
                             }
                         })
-                        
+
                         if result.content and len(result.content) > 0:
                             content_item = result.content[0]
                             if hasattr(content_item, 'text'):
-                                portfolio_result = json.loads(content_item.text)
-                                logger.info(f"✅ Portfolio optimization: {portfolio_result.get('status', 'unknown')}")
-                                return portfolio_result
-                        
+                                portfolio_result = json.loads(content_item.text) if isinstance(content_item.text, str) else content_item.text
+                            else:
+                                portfolio_result = result.content[0] if isinstance(result.content[0], dict) else {}
+
+                            # Normalise: ensure top-level "portfolio_weights" key exists
+                            weights = portfolio_result.get("portfolio_weights", {})
+                            if not weights:
+                                # Try nested path used by some agent versions
+                                weights = portfolio_result.get("optimization_result", {}).get("portfolio_weights", {})
+                            if weights:
+                                logger.info(f"✅ Portfolio optimization: status={portfolio_result.get('status')}, "
+                                            f"{len(weights)} symbols weighted")
+                                return {"status": "success", "portfolio_weights": weights}
+
                         return {"status": "error", "error": "No portfolio optimization received"}
             else:
                 return self._generate_mock_portfolio_weights()
-                
+
         except Exception as e:
             logger.warning(f"⚠️ Portfolio Agent Pool request failed: {e}")
             return self._generate_mock_portfolio_weights()
