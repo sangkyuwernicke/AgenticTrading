@@ -208,7 +208,7 @@ class FinAgentOrchestrator:
                 await self._ensure_memory_agent_initialized()
             
             # Initialize DAG planner
-            await self.dag_planner.initialize()
+            # TODO: await self.dag_planner.initialize()
             
             # Health check all agent pools
             if self.enable_monitoring:
@@ -291,6 +291,7 @@ class FinAgentOrchestrator:
         @self.mcp_server.tool(name="execute_strategy", description="Execute a trading strategy")
         async def execute_strategy(strategy_config: dict) -> dict:
             """Execute a trading strategy using DAG planning"""
+            logger.info(f"✅ execute_strategy registered! Received config: {strategy_config}")
             try:
                 strategy = TradingStrategy(**strategy_config)
                 execution_id = str(uuid.uuid4())

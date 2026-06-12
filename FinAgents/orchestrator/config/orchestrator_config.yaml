@@ -47,7 +47,7 @@ agent_pools:
     
   # Alpha Agent Pool - Signal generation and strategy development
   alpha_agent_pool:
-    url: "http://localhost:5050"
+    url: "http://localhost:8081" # 5050
     enabled: true
     timeout: 120
     retry_attempts: 3
@@ -61,7 +61,7 @@ agent_pools:
     
   # Risk Agent Pool - Risk assessment and management
   risk_agent_pool:
-    url: "http://localhost:7000"
+    url: "http://localhost:8084" # 7000
     enabled: true
     timeout: 90
     retry_attempts: 3
@@ -75,7 +75,7 @@ agent_pools:
     
   # Transaction Cost Agent Pool - Execution cost analysis
   transaction_cost_agent_pool:
-    url: "http://localhost:6000"
+    url: "http://localhost:8085" # 6000
     enabled: true
     timeout: 60
     retry_attempts: 3

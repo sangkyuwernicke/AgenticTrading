@@ -60,7 +60,7 @@ class Neo4jDatabaseManager:
     def __init__(self, 
                  uri: str = "bolt://localhost:7687",
                  username: str = "neo4j",
-                 password: str = "password",
+                 password: str = "finagent123",
                  database: str = "finagent"):
         """
         Initialize Neo4j database manager.
@@ -348,7 +348,7 @@ async def main():
     )
     parser.add_argument("--uri", default="bolt://localhost:7687", help="Neo4j URI")
     parser.add_argument("--username", default="neo4j", help="Neo4j username")
-    parser.add_argument("--password", default="password", help="Neo4j password")
+    parser.add_argument("--password", default="neo4jneo4j", help="Neo4j password")
     parser.add_argument("--database", default="finagent", help="Database name")
     
     args = parser.parse_args()

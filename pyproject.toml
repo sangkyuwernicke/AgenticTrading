@@ -7,4 +7,11 @@ requires-python = ">=3.12"
 dependencies = [
     "a2a-sdk>=0.2.4",
     "mcp[cli]>=1.9.1",
+    "neo4j>=6.1.0",
+    "yaml",
+]
+
+[tool.uv.workspace]
+members = [
+    "FinAgents/agent_pools/alpha_agent_demo",
 ]

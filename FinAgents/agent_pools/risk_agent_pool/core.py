@@ -558,6 +558,7 @@ class RiskAgentPool:
             # Add health check endpoint
             @self.fastapi_app.get("/health")
             async def health_check():
+                print(">>> Performing health check...")
                 return {
                     "status": "healthy",
                     "service": "RiskAgentPool",

@@ -32,7 +32,7 @@ import json
 
 from core.finagent_orchestrator import FinAgentOrchestrator, OrchestratorStatus
 from core.dag_planner import DAGPlanner, TradingStrategy, BacktestConfiguration
-from core.rl_policy_engine import RLPolicyEngine, RLConfiguration, RLAlgorithm
+from core.rl_policy_engine import RLPolicyEngine, RLConfiguration, RLAlgorithm, RewardFunction
 from core.sandbox_environment import SandboxEnvironment, SandboxMode, TestScenario
 
 # Configure logging
@@ -85,7 +85,7 @@ class OrchestratorApplication:
                     "max_concurrent_tasks": 100,
                     "task_timeout": 300,
                     "memory_agent_url": "http://localhost:8010",
-                    "enable_rl": True,
+                    "enable_rl": False,
                     "enable_sandbox": True
                 },
                 "agent_pools": {
@@ -142,17 +142,16 @@ class OrchestratorApplication:
         try:
             # Initialize orchestrator
             self.orchestrator = FinAgentOrchestrator(
-                config=self.config["orchestrator"]
+                # TODO: config=self.config["orchestrator"]
             )
             
             # Initialize sandbox if enabled
             if self.config["orchestrator"].get("enable_sandbox", False):
                 self.sandbox = SandboxEnvironment(
-                    orchestrator=self.orchestrator,
+                    # TODO: orchestrator=self.orchestrator,
                     config=self.config["sandbox"]
                 )
                 logger.info("Sandbox environment initialized")
-            
             # Start orchestrator
             await self.orchestrator.initialize()
             logger.info("Orchestrator initialized successfully")
@@ -188,13 +187,21 @@ class OrchestratorApplication:
     async def _initialize_rl_engine(self):
         """Initialize reinforcement learning engine"""
         logger.info("Initializing RL engine...")
+
+        print(f"RL Config: {self.config['rl_engine']['algorithm']}")
+        print(RLAlgorithm.TD3)
+        print('------------------')
         
         rl_config = RLConfiguration(
-            algorithm=RLAlgorithm(self.config["rl_engine"]["algorithm"]),
+            reward_function=RewardFunction.SHARPE_RATIO,
+            state_features=["returns", "volatility", "rsi"],
+            action_space_dim=3,  # 3 stocks
+            # TODO: algorithm=RLAlgorithm(self.config["rl_engine"]["algorithm"]),
+            algorithm=RLAlgorithm.TD3,
             learning_rate=self.config["rl_engine"]["learning_rate"],
-            buffer_size=self.config["rl_engine"]["buffer_size"],
+            # TODO: buffer_size=self.config["rl_engine"]["buffer_size"],
             batch_size=self.config["rl_engine"]["batch_size"],
-            gamma=self.config["rl_engine"]["gamma"]
+            # TODO: gamma=self.config["rl_engine"]["gamma"]
         )
         
         await self.orchestrator.initialize_rl_engine(rl_config)
@@ -229,6 +236,8 @@ class OrchestratorApplication:
             symbols=["AAPL", "GOOGL", "MSFT"],
             lookback_period=20,
             rebalance_frequency="daily",
+            strategy_type = "performance",
+            timeframe = "1d",
             parameters={
                 "momentum_window": 10,
                 "signal_threshold": 0.02

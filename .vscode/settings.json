@@ -1,5 +1,11 @@
 {
     "python-envs.defaultEnvManager": "ms-python.python:conda",
     "python-envs.defaultPackageManager": "ms-python.python:conda",
-    "python-envs.pythonProjects": []
+    "python-envs.pythonProjects": [],
+    "chat.tools.terminal.autoApprove": {
+        "/^python -c \"import yfinance as yf; print\\(yf\\.download\\('005930\\.KS', start='2025-01-01', end='2025-12-31', progress=False\\)\\.tail\\(\\)\\)\"$/": {
+            "approve": true,
+            "matchCommandLine": true
+        }
+    }
 }

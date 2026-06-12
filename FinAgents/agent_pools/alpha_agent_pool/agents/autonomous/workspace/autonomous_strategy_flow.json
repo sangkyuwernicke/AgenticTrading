@@ -1,0 +1,289 @@
+[
+  {
+    "alpha_id": "autonomous_38de485e",
+    "version": "1.0",
+    "timestamp": "2026-01-19T00:38:43.304221",
+    "market_context": {
+      "symbol": "AAPL",
+      "regime_tag": "bullish_trend",
+      "input_features": {
+        "current_price": 165,
+        "sma_5": 160.4,
+        "sma_10": 156.0,
+        "sma_20": 156.0,
+        "momentum": 0.018518518518518517,
+        "volatility": 0.024636374987375677,
+        "price_change_pct": 0.1,
+        "short_term_momentum": 0.02820512820512824,
+        "trend_strength": 0.02820512820512824
+      }
+    },
+    "decision": {
+      "signal": "BUY",
+      "confidence": 0.9,
+      "reasoning": "Upward trend detected: positive momentum and rising moving averages",
+      "predicted_return": 0.05,
+      "risk_estimate": 0.024636374987375677,
+      "signal_type": "directional",
+      "asset_scope": [
+        "AAPL"
+      ]
+    },
+    "performance_feedback": {
+      "status": "pending",
+      "evaluation_link": null
+    },
+    "metadata": {
+      "generator_agent": "autonomous_alpha_agent",
+      "strategy_prompt": "Autonomous analysis: Analyze AAPL stock momentum indicators and generate trading signals",
+      "code_hash": "sha256:49f1b8b91f535eff",
+      "context_id": "autonomous_20260119_00"
+    }
+  },
+  {
+    "alpha_id": "autonomous_2192a3a4",
+    "version": "1.0",
+    "timestamp": "2026-01-19T00:40:43.754928",
+    "market_context": {
+      "symbol": "AAPL",
+      "regime_tag": "bullish_trend",
+      "input_features": {
+        "current_price": 165,
+        "sma_5": 160.4,
+        "sma_10": 156.0,
+        "sma_20": 156.0,
+        "momentum": 0.018518518518518517,
+        "volatility": 0.024636374987375677,
+        "price_change_pct": 0.1,
+        "short_term_momentum": 0.02820512820512824,
+        "trend_strength": 0.02820512820512824
+      }
+    },
+    "decision": {
+      "signal": "BUY",
+      "confidence": 0.9,
+      "reasoning": "Upward trend detected: positive momentum and rising moving averages",
+      "predicted_return": 0.05,
+      "risk_estimate": 0.024636374987375677,
+      "signal_type": "directional",
+      "asset_scope": [
+        "AAPL"
+      ]
+    },
+    "performance_feedback": {
+      "status": "pending",
+      "evaluation_link": null
+    },
+    "metadata": {
+      "generator_agent": "autonomous_alpha_agent",
+      "strategy_prompt": "Autonomous analysis: Analyze AAPL stock momentum indicators and generate trading signals",
+      "code_hash": "sha256:49f1b8b91f535eff",
+      "context_id": "autonomous_20260119_00"
+    }
+  },
+  {
+    "alpha_id": "autonomous_249269ad",
+    "version": "1.0",
+    "timestamp": "2026-01-19T00:41:07.654668",
+    "market_context": {
+      "symbol": "AAPL",
+      "regime_tag": "bullish_trend",
+      "input_features": {
+        "current_price": 165,
+        "sma_5": 160.4,
+        "sma_10": 156.0,
+        "sma_20": 156.0,
+        "momentum": 0.018518518518518517,
+        "volatility": 0.024636374987375677,
+        "price_change_pct": 0.1,
+        "short_term_momentum": 0.02820512820512824,
+        "trend_strength": 0.02820512820512824
+      }
+    },
+    "decision": {
+      "signal": "BUY",
+      "confidence": 0.9,
+      "reasoning": "Upward trend detected: positive momentum and rising moving averages",
+      "predicted_return": 0.05,
+      "risk_estimate": 0.024636374987375677,
+      "signal_type": "directional",
+      "asset_scope": [
+        "AAPL"
+      ]
+    },
+    "performance_feedback": {
+      "status": "pending",
+      "evaluation_link": null
+    },
+    "metadata": {
+      "generator_agent": "autonomous_alpha_agent",
+      "strategy_prompt": "Autonomous analysis: Analyze AAPL stock momentum indicators and generate trading signals",
+      "code_hash": "sha256:49f1b8b91f535eff",
+      "context_id": "autonomous_20260119_00"
+    }
+  },
+  {
+    "alpha_id": "autonomous_236d2d22",
+    "version": "1.0",
+    "timestamp": "2026-01-19T00:57:28.735274",
+    "market_context": {
+      "symbol": "AAPL",
+      "regime_tag": "bullish_trend",
+      "input_features": {
+        "current_price": 122,
+        "sma_5": 117.4,
+        "sma_10": 111.2,
+        "sma_20": 111.2,
+        "momentum": 0.016666666666666666,
+        "volatility": 0.02289577305552094,
+        "price_change_pct": 0.22,
+        "short_term_momentum": 0.05575539568345326,
+        "trend_strength": 0.05575539568345326
+      }
+    },
+    "decision": {
+      "signal": "BUY",
+      "confidence": 0.9,
+      "reasoning": "Upward trend detected: positive momentum and rising moving averages",
+      "predicted_return": 0.11,
+      "risk_estimate": 0.02289577305552094,
+      "signal_type": "directional",
+      "asset_scope": [
+        "AAPL"
+      ]
+    },
+    "performance_feedback": {
+      "status": "pending",
+      "evaluation_link": null
+    },
+    "metadata": {
+      "generator_agent": "autonomous_alpha_agent",
+      "strategy_prompt": "Autonomous analysis: Create a new quantitative trading strategy based on technical indicators for signal generation",
+      "code_hash": "sha256:bcbe4521f5ce0db8",
+      "context_id": "autonomous_20260119_00"
+    }
+  },
+  {
+    "alpha_id": "autonomous_986aa20d",
+    "version": "1.0",
+    "timestamp": "2026-01-19T01:23:39.494506",
+    "market_context": {
+      "symbol": "AAPL",
+      "regime_tag": "bullish_trend",
+      "input_features": {
+        "current_price": 122,
+        "sma_5": 117.4,
+        "sma_10": 111.2,
+        "sma_20": 111.2,
+        "momentum": 0.016666666666666666,
+        "volatility": 0.02289577305552094,
+        "price_change_pct": 0.22,
+        "short_term_momentum": 0.05575539568345326,
+        "trend_strength": 0.05575539568345326
+      }
+    },
+    "decision": {
+      "signal": "BUY",
+      "confidence": 0.9,
+      "reasoning": "Upward trend detected: positive momentum and rising moving averages",
+      "predicted_return": 0.11,
+      "risk_estimate": 0.02289577305552094,
+      "signal_type": "directional",
+      "asset_scope": [
+        "AAPL"
+      ]
+    },
+    "performance_feedback": {
+      "status": "pending",
+      "evaluation_link": null
+    },
+    "metadata": {
+      "generator_agent": "autonomous_alpha_agent",
+      "strategy_prompt": "Autonomous analysis: Create a new quantitative trading strategy based on technical indicators for signal generation",
+      "code_hash": "sha256:bcbe4521f5ce0db8",
+      "context_id": "autonomous_20260119_01"
+    }
+  },
+  {
+    "alpha_id": "autonomous_0e10b00f",
+    "version": "1.0",
+    "timestamp": "2026-02-04T23:59:39.568594",
+    "market_context": {
+      "symbol": "AAPL",
+      "regime_tag": "bullish_trend",
+      "input_features": {
+        "current_price": 165,
+        "sma_5": 160.4,
+        "sma_10": 156.0,
+        "sma_20": 156.0,
+        "momentum": 0.018518518518518517,
+        "volatility": 0.024636374987375677,
+        "price_change_pct": 0.1,
+        "short_term_momentum": 0.02820512820512824,
+        "trend_strength": 0.02820512820512824
+      }
+    },
+    "decision": {
+      "signal": "BUY",
+      "confidence": 0.9,
+      "reasoning": "Upward trend detected: positive momentum and rising moving averages",
+      "predicted_return": 0.05,
+      "risk_estimate": 0.024636374987375677,
+      "signal_type": "directional",
+      "asset_scope": [
+        "AAPL"
+      ]
+    },
+    "performance_feedback": {
+      "status": "pending",
+      "evaluation_link": null
+    },
+    "metadata": {
+      "generator_agent": "autonomous_alpha_agent",
+      "strategy_prompt": "Autonomous analysis: Analyze AAPL stock momentum indicators and generate trading signals",
+      "code_hash": "sha256:49f1b8b91f535eff",
+      "context_id": "autonomous_20260204_23"
+    }
+  },
+  {
+    "alpha_id": "autonomous_c7362ac2",
+    "version": "1.0",
+    "timestamp": "2026-02-05T00:04:57.934369",
+    "market_context": {
+      "symbol": "AAPL",
+      "regime_tag": "bullish_trend",
+      "input_features": {
+        "current_price": 122,
+        "sma_5": 117.4,
+        "sma_10": 111.2,
+        "sma_20": 111.2,
+        "momentum": 0.016666666666666666,
+        "volatility": 0.02289577305552094,
+        "price_change_pct": 0.22,
+        "short_term_momentum": 0.05575539568345326,
+        "trend_strength": 0.05575539568345326
+      }
+    },
+    "decision": {
+      "signal": "BUY",
+      "confidence": 0.9,
+      "reasoning": "Upward trend detected: positive momentum and rising moving averages",
+      "predicted_return": 0.11,
+      "risk_estimate": 0.02289577305552094,
+      "signal_type": "directional",
+      "asset_scope": [
+        "AAPL"
+      ]
+    },
+    "performance_feedback": {
+      "status": "pending",
+      "evaluation_link": null
+    },
+    "metadata": {
+      "generator_agent": "autonomous_alpha_agent",
+      "strategy_prompt": "Autonomous analysis: Create a new quantitative trading strategy based on technical indicators for signal generation",
+      "code_hash": "sha256:bcbe4521f5ce0db8",
+      "context_id": "autonomous_20260205_00"
+    }
+  }
+]

@@ -518,8 +518,7 @@ class SandboxEnvironment:
             "success_rate": 0.0,
             "average_performance": {}
         }
-        
-        logger.info(f"Sandbox environment initialized: {config.sandbox_id}")
+        # TODO: logger.info(f"Sandbox environment initialized: {config.sandbox_id}")
     
     async def initialize(self):
         """Initialize sandbox environment"""

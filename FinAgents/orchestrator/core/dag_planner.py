@@ -155,6 +155,9 @@ class TradingStrategy:
     risk_parameters: Dict[str, Any] = field(default_factory=dict)
     memory_context: Dict[str, Any] = field(default_factory=dict)
     created_at: datetime = field(default_factory=datetime.now)
+    # TODO: check why the below vars are not defined in the constructor
+    lookback_period: int = 60,  # Lookback period for data fetching and signal generation
+    rebalance_frequency: str = "weekly"  # Rebalance frequency for execution
 
 
 @dataclass
