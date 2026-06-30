@@ -12,7 +12,7 @@ echo "📁 Project root directory: ${PROJECT_ROOT}"
 echo "📁 Script directory: ${SCRIPT_DIR}"
 
 # Check if we're running from the correct directory
-if [[ "$(basename "$(pwd)")" != "FinAgent-Orchestration" ]]; then
+if [[ "$(basename "$(pwd)")" != "FinAgent-Orchestration" && "$(basename "$(pwd)")" != "AgenticTrading" ]]; then
     echo "⚠️  Warning: Script should be run from project root directory"
     echo "   Current directory: $(pwd)"
     echo "   Expected to be in: ${PROJECT_ROOT}"
@@ -29,9 +29,29 @@ if [[ "$(basename "$(pwd)")" != "FinAgent-Orchestration" ]]; then
 fi
 
 # Verify Python environment availability
-if ! command -v python &> /dev/null; then
-    echo "❌ Python not found, please install Python 3.8+"
+if [ -f "${PROJECT_ROOT}/.venv/bin/python" ]; then
+    PYTHON_EXEC="${PROJECT_ROOT}/.venv/bin/python"
+    CONDA_RUN=""
+elif [ -f "${PROJECT_ROOT}/.venv/bin/python3" ]; then
+    PYTHON_EXEC="${PROJECT_ROOT}/.venv/bin/python3"
+    CONDA_RUN=""
+elif command -v conda &> /dev/null && conda info --envs | grep -q "agent"; then
+    PYTHON_EXEC="python3"
+    CONDA_RUN="conda run -n agent"
+elif command -v python3 &> /dev/null; then
+    PYTHON_EXEC="python3"
+    CONDA_RUN=""
+elif command -v python &> /dev/null; then
+    PYTHON_EXEC="python"
+    CONDA_RUN=""
+else
+    echo "❌ Python not found, please install Python 3.8+ or configure a virtual environment"
     exit 1
+fi
+
+echo "🐍 Using Python executable: ${PYTHON_EXEC}"
+if [ -n "${CONDA_RUN}" ]; then
+    echo "📦 Running via conda: ${CONDA_RUN}"
 fi
 
 # Configure PYTHONPATH environment variable
@@ -46,12 +66,12 @@ pre_check() {
     cd "${PROJECT_ROOT}"
     
     echo "   Validating core modules..."
-    if ! conda run -n agent python -c "from FinAgents.agent_pools.data_agent_pool import core" 2>/dev/null; then
+    if ! ${CONDA_RUN} ${PYTHON_EXEC} -c "from FinAgents.agent_pools.data_agent_pool import core" 2>/dev/null; then
         echo "❌ Failed to import data_agent_pool.core"
         return 1
     fi
     
-    if ! conda run -n agent python -c "from FinAgents.agent_pools.alpha_agent_pool import core" 2>/dev/null; then
+    if ! ${CONDA_RUN} ${PYTHON_EXEC} -c "from FinAgents.agent_pools.alpha_agent_pool import core" 2>/dev/null; then
         echo "❌ Failed to import alpha_agent_pool.core"
         return 1
     fi
@@ -108,8 +128,8 @@ start_agent_pool() {
     # Change to project root directory
     cd "${PROJECT_ROOT}"
     
-    # Launch service using conda environment
-    nohup conda run -n agent python ${script} > ${log_file} 2>&1 &
+    # Launch service using resolved python
+    nohup ${CONDA_RUN} ${PYTHON_EXEC} ${script} --port ${port} > ${log_file} 2>&1 &
     local pid=$!
     echo ${pid} > ${pid_file}
     
@@ -147,8 +167,8 @@ start_mcp_server() {
     # Change to FinAgents/memory directory
     cd "${PROJECT_ROOT}/FinAgents/memory"
     
-    # Launch MCP server using conda environment
-    nohup conda run -n agent python mcp_server.py > ${log_file} 2>&1 &
+    # Launch MCP server using resolved python
+    nohup ${CONDA_RUN} ${PYTHON_EXEC} mcp_server.py > ${log_file} 2>&1 &
     local pid=$!
     echo ${pid} > ${pid_file}
     
@@ -182,8 +202,8 @@ start_a2a_server() {
     # Change to FinAgents/memory directory
     cd "${PROJECT_ROOT}/FinAgents/memory"
     
-    # Launch A2A server using conda environment
-    nohup conda run -n agent python a2a_server.py > ${log_file} 2>&1 &
+    # Launch A2A server using resolved python
+    nohup ${CONDA_RUN} ${PYTHON_EXEC} a2a_server.py > ${log_file} 2>&1 &
     local pid=$!
     echo ${pid} > ${pid_file}
     
@@ -214,7 +234,9 @@ else
     # Use existing memory services launcher
     echo "🔧 Starting Memory Services using dedicated launcher..."
     cd "${PROJECT_ROOT}/FinAgents/memory"
-    nohup bash start_memory_services.sh memory > "${PROJECT_ROOT}/logs/memory_services.log" 2>&1 &
+    # Ensure virtual environment python/uvicorn is preferred
+    export PATH="${PROJECT_ROOT}/.venv/bin:${PATH}"
+    nohup bash start_memory_system.sh start > "${PROJECT_ROOT}/logs/memory_services.log" 2>&1 &
     MEMORY_PID=$!
     echo ${MEMORY_PID} > "${PROJECT_ROOT}/logs/memory_services.pid"
     echo "✅ Memory Services launcher started (PID: ${MEMORY_PID})"
@@ -257,14 +279,22 @@ check_service() {
     local port=$2
     local pid_file="${PROJECT_ROOT}/logs/${name}.pid"
     
+    # Check if port is responding first
+    if curl -s --connect-timeout 5 http://localhost:${port}/health &> /dev/null || curl -s --connect-timeout 5 http://localhost:${port}/ &> /dev/null; then
+        if [ -f "${pid_file}" ]; then
+            local pid=$(cat ${pid_file})
+            echo "✅ ${name}: Running normally (PID: ${pid:-N/A}, Port: ${port})"
+        else
+            echo "✅ ${name}: Running normally (Port: ${port})"
+        fi
+        return 0
+    fi
+    
+    # If port is not responding, check by PID
     if [ -f "${pid_file}" ]; then
         local pid=$(cat ${pid_file})
         if kill -0 ${pid} 2>/dev/null; then
-            if curl -s --connect-timeout 5 http://localhost:${port}/health &> /dev/null || curl -s --connect-timeout 5 http://localhost:${port}/ &> /dev/null; then
-                echo "✅ ${name}: Running normally (PID: ${pid}, Port: ${port})"
-            else
-                echo "⚠️ ${name}: Process running but service unavailable (PID: ${pid}, Port: ${port})"
-            fi
+            echo "⚠️ ${name}: Process running but service unavailable (PID: ${pid}, Port: ${port})"
         else
             echo "❌ ${name}: Process terminated"
         fi

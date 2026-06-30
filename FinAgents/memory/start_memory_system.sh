@@ -8,7 +8,7 @@ set -e  # Exit on any error
 
 # Configuration
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-A2A_PORT=8002
+A2A_PORT=8010
 MCP_PORT=8001
 MEMORY_PORT=8000
 LOG_DIR="$SCRIPT_DIR/logs"

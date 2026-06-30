@@ -959,6 +959,12 @@ class DataAgentPoolMCPServer:
             raise
 
 if __name__ == "__main__":
+    import argparse
+    parser = argparse.ArgumentParser(description="Data Agent Pool MCP Server")
+    parser.add_argument("--port", type=int, default=8001, help="Port to run the server on")
+    parser.add_argument("--host", type=str, default="0.0.0.0", help="Host to run the server on")
+    args = parser.parse_args()
+    
     # Script entry point: start the DataAgentPoolMCPServer
-    pool = DataAgentPoolMCPServer(host="0.0.0.0", port=8001)
+    pool = DataAgentPoolMCPServer(host=args.host, port=args.port)
     pool.run()
