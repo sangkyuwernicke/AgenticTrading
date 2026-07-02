@@ -214,19 +214,26 @@ class ReplayBuffer:
         if len(self.buffer) < batch_size:
             return list(self.buffer)
         
+        indices = list(range(len(self.buffer)))
         if self.enable_memory_integration and self.memory_weights:
             # Sample based on importance weights
-            indices = list(range(len(self.buffer)))
             weights = [self.memory_weights.get(i, 1.0) for i in indices]
             weights = np.array(weights) / np.sum(weights)
             
+            # Check if there are enough non-zero entries for unique choice
+            if np.count_nonzero(weights) < batch_size:
+                # Fallback to uniform sampling
+                sampled_indices = np.random.choice(indices, size=batch_size, replace=False)
+                return [self.buffer[i] for i in sampled_indices]
+                
             sampled_indices = np.random.choice(
                 indices, size=batch_size, replace=False, p=weights
             )
             return [self.buffer[i] for i in sampled_indices]
         else:
             # Uniform random sampling
-            return np.random.choice(self.buffer, size=batch_size, replace=False).tolist()
+            sampled_indices = np.random.choice(indices, size=batch_size, replace=False)
+            return [self.buffer[i] for i in sampled_indices]
     
     def size(self) -> int:
         """Get buffer size"""
@@ -392,7 +399,7 @@ class TD3Agent:
     
     def load_model(self, filepath: str):
         """Load agent model"""
-        checkpoint = torch.load(filepath)
+        checkpoint = torch.load(filepath, weights_only=False)
         self.actor.load_state_dict(checkpoint['actor_state_dict'])
         self.critic.load_state_dict(checkpoint['critic_state_dict'])
         self.actor_optimizer.load_state_dict(checkpoint['actor_optimizer_state_dict'])
@@ -850,7 +857,7 @@ class RLPolicyEngine:
             raise FileNotFoundError(f"Model file {filepath} not found")
         
         # Load config from saved model
-        checkpoint = torch.load(filepath)
+        checkpoint = torch.load(filepath, weights_only=False)
         config = checkpoint['config']
         
         # Determine state and action dimensions from saved model

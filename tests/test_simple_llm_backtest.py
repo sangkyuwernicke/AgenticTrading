@@ -185,7 +185,7 @@ class OrchestratorBasedBacktester:
             host="localhost", 
             port=9000,
             enable_memory=True,
-            enable_rl=False,
+            enable_rl=True,
             enable_monitoring=True
         )
         
