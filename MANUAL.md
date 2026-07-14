@@ -565,6 +565,40 @@ bash tests/stop_agent_pools.sh
 - `GET /tools` — MCP 도구 목록
 - `GET /sse` — SSE MCP 엔드포인트
 
+### 10.4 Portfolio Construction Agent Pool MCP Server (`FinAgents/agent_pools/portfolio_construction_agent_pool/core.py`)
+
+서버명: `PortfolioConstructionAgentPool`  
+연결: `python core.py` (포트 8083)
+
+| 도구명 | 설명 | 주요 파라미터 |
+|--------|------|---------------|
+| `process_strategy_request` | 종목, 알파 시그널, 리스크 제약을 바탕으로 기대수익률과 포트폴리오 최적 가중치 연산 | `symbols[]`, `date`, `alpha_signals`, `risk_constraints`, `transaction_costs` |
+
+### 10.5 Risk Agent Pool MCP Server (`FinAgents/agent_pools/risk_agent_pool/core.py`)
+
+서버명: `RiskAgentPool`  
+연결: `python core.py` (포트 8084)
+
+| 도구명 | 설명 | 주요 파라미터 |
+|--------|------|---------------|
+| `calculate_portfolio_risk` | 포트폴리오 자산 분포 정보를 토대로 위험 지표(VaR 등) 계량 산출 | `portfolio_data: dict`, `risk_measures[]` |
+| `process_risk_analysis_request` | 오케스트레이터 분석 요구사항을 압축 해제하고 하위 리스크 에이전트들에게 분석 태스크 분배 | `context`, `metadata` |
+| `process_strategy_request` | 오케스트레이터 연동 규격에 맞추어 포트폴리오 리스크 조건 부합 검증 | `request: dict` |
+| `get_agent_status` | 리스크 제어 에이전트들의 가동 상태 리포트 | (없음) |
+
+### 10.6 Transaction Cost Agent Pool MCP Server (`FinAgents/agent_pools/transaction_cost_agent_pool/core.py`)
+
+서버명: `TransactionCostAgentPool`  
+연결: `python core.py` (포트 8085)
+
+| 도구명 | 설명 | 주요 파라미터 |
+|--------|------|---------------|
+| `estimate_transaction_cost` | 거래 방향과 수량을 이용한 사전 거래 수수료 및 슬리피지(Slippage) 비용 추정 | `symbol`, `quantity`, `side`, `order_type`, `venue`, `market_conditions` |
+| `analyze_execution_quality` | 실제 매매 집행 데이터를 기반으로 사후 체결 품질(Execution Quality) 진단 | `execution_data: dict`, `benchmark_data: dict` |
+| `optimize_portfolio_execution` | 대량 거래 주문 시 수수료 손실을 막기 위한 최적 분할 거래 경로 산출 | `symbols[]`, `quantities[]`, `sides[]`, `time_horizon` |
+| `calculate_risk_adjusted_costs` | 리스크 불확실성을 가산한 종합 거래비용 계산 | `trade_spec: dict`, `risk_parameters` |
+| `get_agent_status` | 에이전트의 응답 지연 및 에러율 상태 반환 | (없음) |
+
 ---
 
 ## 11. 강화학습 (RL) 알고리즘
